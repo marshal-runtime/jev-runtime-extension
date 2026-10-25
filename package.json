@@ -1,0 +1,30 @@
+{
+  "name": "@marshal/jev",
+  "version": "1.0.0",
+  "description": "Runtime extension connecting Marshal to TypeSafe's Jev \"System One\" model: a @marshal/jev:client service plus jev.* capabilities and an in-chat connection card.",
+  "private": true,
+  "type": "commonjs",
+  "main": "dist/runtime.cjs",
+  "types": "src/index.ts",
+  "files": [
+    "dist",
+    "runtime-extension.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.3",
+    "vitest": "^3.2.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

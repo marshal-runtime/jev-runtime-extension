@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.env.*
+credentials.json
+*.pem
+*.key
+.DS_Store
+*.tgz
