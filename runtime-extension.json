@@ -3,10 +3,10 @@
   "identity": "@marshal/jev",
   "version": "1.0.0",
   "agentGuidance": {
-    "purpose": "TypeSafe Jev \"System One\" connector: fast structured-choice/score/noul answers over an arbitrary JSON state, plus model discovery, through a sealed per-machine API key.",
+    "purpose": "Jev \"System One\" connector backed by OpenAI: fast structured choice/score/noul answers over an arbitrary JSON state, plus model discovery, through a sealed per-machine OpenAI API key.",
     "when": "The task needs a fast classification, ranking, or yes/no judgement over some state (page content, a document, a list of options) rather than free-form generation, or needs to know which Jev models are available.",
     "recipe": "Call jev.status first. If state is 'not-connected' or 'invalid-key', call jev.connect to show the sign-in card and stop until the user connects. Once connected, call jev.ask with { model?, state, questions } (see criteria for 'choice' | 'score' | 'noul' question kinds) or jev.models.list to see available models.",
-    "boundaries": "The API key never appears in any capability output or log. jev.ask forwards 'state'/'questions' verbatim to TypeSafe - do not put secrets there. Answers are validated (choice in options, probabilities sum to ~1) before returning; invalid responses error, never get silently repaired."
+    "boundaries": "The API key never appears in any capability output or log. jev.ask forwards 'state'/'questions' verbatim to OpenAI - do not put secrets there. Answers are validated (choice in options, probabilities sum to ~1) before returning; invalid responses error, never get silently repaired."
   },
   "entrypoint": "dist/runtime.cjs",
   "moduleFormat": "commonjs-bundle-v1",
@@ -16,7 +16,7 @@
       "shape": "object",
       "version": "1.0.0",
       "type": "application/vnd.marshal.runtime-service+typescript",
-      "docs": "JevClient v1.0.0: status() reports connection state without ever returning the key; ask(request, options) calls POST /v1/systemone, validates every choice/score/noul answer, retries 429/503/529 up to twice with backoff, and throws typed JevClientError (JEV_NOT_CONNECTED | JEV_INVALID_KEY | JEV_RATE_LIMITED | JEV_UNAVAILABLE | JEV_BAD_REQUEST | JEV_INVALID_RESPONSE | JEV_ABORTED); listModels() calls GET /v1/models. Bound at Symbol.for('@marshal/jev:client'). Raw API keys are never returned to callers."
+      "docs": "JevClient v1.0.0: status() reports connection state without ever returning the key; ask(request, options) calls OpenAI POST /v1/chat/completions with Structured Outputs, validates every choice/score/noul answer, retries 429/503/529 up to twice with backoff, and throws typed JevClientError (JEV_NOT_CONNECTED | JEV_INVALID_KEY | JEV_RATE_LIMITED | JEV_UNAVAILABLE | JEV_BAD_REQUEST | JEV_INVALID_RESPONSE | JEV_ABORTED); listModels() calls OpenAI GET /v1/models. Bound at Symbol.for('@marshal/jev:client'). Raw API keys are never returned to callers."
     },
     {
       "id": "jev.status.output",
@@ -46,9 +46,19 @@
         "id": "@marshal/jev:client",
         "version": "1.0.0",
         "publicMethods": [
-          { "name": "status", "output": "JevStatus" },
-          { "name": "ask", "input": "JevAskRequest, JevAskOptions?", "output": "JevAskResult" },
-          { "name": "listModels", "output": "JevModelCard[]" }
+          {
+            "name": "status",
+            "output": "JevStatus"
+          },
+          {
+            "name": "ask",
+            "input": "JevAskRequest, JevAskOptions?",
+            "output": "JevAskResult"
+          },
+          {
+            "name": "listModels",
+            "output": "JevModelCard[]"
+          }
         ]
       }
     ]
@@ -59,22 +69,28 @@
       "properties": {
         "defaultModel": {
           "type": "string",
-          "description": "Default Jev model id used when a request omits 'model'. Defaults to 'jev-latest'."
+          "description": "OpenAI model used when a request omits 'model' or names a legacy 'jev-*' model. Defaults to 'gpt-5-mini'."
         },
         "apiBaseUrl": {
           "type": "string",
-          "description": "Overrides the TypeSafe API base URL (default https://api.typesafe.ai). Testing/self-host escape hatch only."
+          "description": "Overrides the OpenAI API base URL (default https://api.openai.com). Testing/proxy escape hatch only."
         },
         "stateDir": {
           "type": "string",
-          "description": "Sealed-credential-state persistence root. A filesystem location, never a value - defaults to .marshal-state/jev when absent."
+          "description": "Sealed-credential-state persistence root. A filesystem location, never a value - defaults to .marshal-state/jev-openai when absent."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Optional reasoning_effort sent to OpenAI reasoning models. Defaults to 'minimal' for gpt-5 / gpt-5-mini / gpt-5-nano, otherwise unset."
         }
       },
       "additionalProperties": false
     }
   },
   "contributes": {
-    "services": ["@marshal/jev:client"],
+    "services": [
+      "@marshal/jev:client"
+    ],
     "capabilities": [
       "jev.status",
       "jev.models.list",

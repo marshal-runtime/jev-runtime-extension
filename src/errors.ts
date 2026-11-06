@@ -27,7 +27,7 @@ export function notConnectedError(): JevClientError {
 export function invalidKeyError(detail?: string): JevClientError {
   return new JevClientError(
     "JEV_INVALID_KEY",
-    detail ?? "The stored TypeSafe API key was rejected (HTTP 401).",
+    detail ?? "The stored OpenAI API key was rejected (HTTP 401).",
     { status: 401 },
   );
 }
@@ -35,7 +35,7 @@ export function invalidKeyError(detail?: string): JevClientError {
 export function permissionDeniedError(detail?: string): JevClientError {
   return new JevClientError(
     "JEV_INVALID_KEY",
-    detail ?? "The TypeSafe API key does not have permission for this request (HTTP 403).",
+    detail ?? "The OpenAI API key does not have permission for this request (HTTP 403).",
     { status: 403 },
   );
 }
@@ -43,7 +43,7 @@ export function permissionDeniedError(detail?: string): JevClientError {
 export function rateLimitedError(detail?: string): JevClientError {
   return new JevClientError(
     "JEV_RATE_LIMITED",
-    detail ?? "TypeSafe rate-limited this request (HTTP 429).",
+    detail ?? "OpenAI rate-limited this request (HTTP 429).",
     { status: 429 },
   );
 }
@@ -51,7 +51,7 @@ export function rateLimitedError(detail?: string): JevClientError {
 export function unavailableError(status?: number, detail?: string): JevClientError {
   return new JevClientError(
     "JEV_UNAVAILABLE",
-    detail ?? `TypeSafe is temporarily unavailable${status ? ` (HTTP ${status})` : ""}.`,
+    detail ?? `OpenAI is temporarily unavailable${status ? ` (HTTP ${status})` : ""}.`,
     status !== undefined ? { status } : undefined,
   );
 }

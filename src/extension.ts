@@ -16,7 +16,7 @@ import { nodeFetch } from "./transport.js";
 
 /**
  * dist/runtime.cjs entrypoint (runtime-extension.json). Wires the real
- * production transport (global `fetch` against api.typesafe.ai), the real
+ * production transport (global `fetch` against api.openai.com), the real
  * injected `@marshal/runtime-secrets` MODULE, and production sealed-key-state
  * persistence under `stateDir`. Exercised by unit tests against a fake
  * activation context and injectable seams, never against the real network or
@@ -24,12 +24,14 @@ import { nodeFetch } from "./transport.js";
  */
 export interface JevExtensionConfiguration extends RuntimeExtensionConfiguration {
   readonly defaultModel?: string;
+  readonly reasoningEffort?: string;
   readonly apiBaseUrl?: string;
-  /** Sealed-key-state persistence root; defaults to `.marshal-state/jev`. */
+  /** Sealed-key-state persistence root; defaults to `.marshal-state/jev-openai`. */
   readonly stateDir?: string;
 }
 
-const DEFAULT_STATE_DIR = ".marshal-state/jev";
+// Not `.marshal-state/jev`: that directory holds keys saved for TypeSafe, which OpenAI would reject.
+const DEFAULT_STATE_DIR = ".marshal-state/jev-openai";
 
 function nodeStateFsAdapter(): StateFsPrimitives {
   return {
@@ -103,6 +105,7 @@ const extensionModule: RuntimeExtensionModule<JevExtensionConfiguration> = {
       keyStore,
       fetchImpl: nodeFetch(),
       ...(context.configuration.defaultModel ? { defaultModel: context.configuration.defaultModel } : {}),
+      ...(context.configuration.reasoningEffort ? { reasoningEffort: context.configuration.reasoningEffort } : {}),
       ...(context.configuration.apiBaseUrl ? { apiBaseUrl: context.configuration.apiBaseUrl } : {}),
     });
 

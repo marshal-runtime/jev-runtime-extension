@@ -1,6 +1,10 @@
 # @marshal/jev
 
-Marshal Runtime extension connecting to [TypeSafe](https://typesafe.ai)'s **Jev "System One"** model: fast, validated `choice` / `score` / `noul` answers over an arbitrary JSON `state`, plus model discovery — behind a sealed, per-machine API key.
+Marshal Runtime extension providing the **Jev "System One"** contract (originally TypeSafe's): fast, validated `choice` / `score` / `noul` answers over an arbitrary JSON `state`, plus model discovery — now answered by **OpenAI** (Chat Completions with Structured Outputs) behind a sealed, per-machine OpenAI API key.
+
+## How answers are produced
+
+`ask()` sends one `POST /v1/chat/completions` call per request with a strict JSON schema covering every question. Choice and score questions come back as a ranking of up to five likely options; options the model did not rank get probability 0 and the ranked mass is renormalized, so the answers pass the same validation as before. `noul` questions come back as `probability_true`. Requests that name a legacy `jev-*` model (the automation extension sends `jev-latest`) use the configured OpenAI model.
 
 ## What it provides
 
@@ -21,12 +25,12 @@ interface JevClient {
 
 | Code | Meaning |
 | --- | --- |
-| `JEV_NOT_CONNECTED` | No key is active (stored or `TYPESAFE_API_KEY`). |
-| `JEV_INVALID_KEY` | TypeSafe returned 401/403 for the active key. |
-| `JEV_RATE_LIMITED` | TypeSafe returned 429 after retries. |
-| `JEV_UNAVAILABLE` | TypeSafe returned 5xx/529, or a network failure. |
-| `JEV_BAD_REQUEST` | TypeSafe rejected the request (any other 4xx), or the caller's input was malformed. |
-| `JEV_INVALID_RESPONSE` | TypeSafe's response didn't pass answer validation. |
+| `JEV_NOT_CONNECTED` | No key is active (stored or `OPENAI_API_KEY`). |
+| `JEV_INVALID_KEY` | OpenAI returned 401/403 for the active key. |
+| `JEV_RATE_LIMITED` | OpenAI returned 429 after retries. |
+| `JEV_UNAVAILABLE` | OpenAI returned 5xx, or a network failure. |
+| `JEV_BAD_REQUEST` | OpenAI rejected the request (any other 4xx), or the caller's input was malformed. |
+| `JEV_INVALID_RESPONSE` | OpenAI's response was malformed, a refusal, or didn't pass answer validation. |
 | `JEV_ABORTED` | The caller's `AbortSignal` fired, or `timeoutMs` elapsed. |
 
 ### Capabilities
@@ -35,7 +39,7 @@ interface JevClient {
 | --- | --- | --- |
 | `jev.status` | Reports connection state (`not-connected` / `connected` / `invalid-key` / `rate-limited` / `unavailable`), active model, and key `source` (`env`/`stored`). Never the key. | low |
 | `jev.models.list` | `GET /v1/models`; returns `{ models: JevModelCard[] }`. | low |
-| `jev.ask` | `POST /v1/systemone`; returns `{ answers, model, usage, latencyMs }`. | medium |
+| `jev.ask` | `POST /v1/chat/completions` (Structured Outputs); returns `{ answers, model, usage, latencyMs }`. | medium |
 | `jev.connect` | Shows/refreshes the connection card in chat. | low |
 | `jev.connection.save_key` | Card-only: verifies a pasted key via `GET /v1/models` **before** sealing and storing it. | medium |
 | `jev.connection.test` | Card-only: re-verifies the active key. | low |
@@ -45,15 +49,15 @@ interface JevClient {
 
 ```
 not-connected → (jev.connect, paste + save) → connected
-connected → (key revoked / TypeSafe error) → invalid-key | rate-limited | unavailable
-any state → (jev.disconnect, stored key only) → not-connected (or env, if TYPESAFE_API_KEY is set)
+connected → (key revoked / OpenAI error) → invalid-key | rate-limited | unavailable
+any state → (jev.disconnect, stored key only) → not-connected (or env, if OPENAI_API_KEY is set)
 ```
 
-`jev.status`'s `source` field distinguishes a key that came from the sealed local store (`"stored"`) from one supplied via the `TYPESAFE_API_KEY` environment variable (`"env"`) — an env-supplied key cannot be edited or removed from the card (its note says so), only a stored key can be disconnected.
+`jev.status`'s `source` field distinguishes a key that came from the sealed local store (`"stored"`) from one supplied via the `OPENAI_API_KEY` environment variable (`"env"`) — an env-supplied key cannot be edited or removed from the card (its note says so), only a stored key can be disconnected.
 
 ## Key storage
 
-The API key is sealed through the host-injected `@marshal/runtime-secrets` module (the same mechanism as `code-review-ext/packages/github-core`) into this extension's `stateDir` (default `.marshal-state/jev`). There is **no plaintext key file at any stage**: if secure storage is unavailable, `jev.connection.save_key` fails closed with a clear error rather than falling back to plaintext. `TYPESAFE_API_KEY` is supported as a **read-only fallback** source when nothing is stored.
+The API key is sealed through the host-injected `@marshal/runtime-secrets` module (the same mechanism as `code-review-ext/packages/github-core`) into this extension's `stateDir` (default `.marshal-state/jev-openai`, kept apart from keys saved for TypeSafe). There is **no plaintext key file at any stage**: if secure storage is unavailable, `jev.connection.save_key` fails closed with a clear error rather than falling back to plaintext. `OPENAI_API_KEY` is supported as a **read-only fallback** source when nothing is stored.
 
 ## Answer validation and retry — attribution
 
@@ -61,9 +65,10 @@ The `choice`-answer validation (`src/validation.ts::validateChoiceAnswer`) and t
 
 ## Configuration (`runtime-extension.json` → `configuration.schema`)
 
-- `defaultModel` (string, default `"jev-latest"`)
-- `apiBaseUrl` (string, default `"https://api.typesafe.ai"`) — testing/self-host escape hatch
-- `stateDir` (string, default `.marshal-state/jev`)
+- `defaultModel` (string, default `"gpt-5-mini"`)
+- `reasoningEffort` (string, optional; defaults to `"minimal"` for gpt-5 / gpt-5-mini / gpt-5-nano)
+- `apiBaseUrl` (string, default `"https://api.openai.com"`) — testing/proxy escape hatch
+- `stateDir` (string, default `.marshal-state/jev-openai`)
 
 ## Development
 

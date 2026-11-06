@@ -109,8 +109,8 @@ export function createJevCapabilityProvider(client: JevClient): CapabilityProvid
       name: "jev.status",
       version: "1.0.0",
       title: "Read Jev connection status",
-      description: "Reports whether TypeSafe's Jev API is connected, and the active model. Never returns the key.",
-      tags: ["jev", "typesafe", "status"],
+      description: "Reports whether Jev's OpenAI key is connected, and the active model. Never returns the key.",
+      tags: ["jev", "openai", "status"],
       outputSchema: STATUS_OUTPUT_SCHEMA,
       permissions: [{ permission: "jev.status.read", risk: "low", reason: "Reads cached connection status only." }],
     },
@@ -120,9 +120,9 @@ export function createJevCapabilityProvider(client: JevClient): CapabilityProvid
       version: "1.0.0",
       title: "List available Jev models",
       description: "Calls GET /v1/models and lists the Jev model ids available to the connected account.",
-      tags: ["jev", "typesafe", "models"],
+      tags: ["jev", "openai", "models"],
       outputSchema: MODELS_LIST_OUTPUT_SCHEMA,
-      permissions: [{ permission: "jev.models.read", risk: "low", reason: "Reads the model catalog from TypeSafe." }],
+      permissions: [{ permission: "jev.models.read", risk: "low", reason: "Reads the model catalog from OpenAI." }],
     },
     {
       protocolVersion: PROTOCOL_VERSION,
@@ -130,12 +130,12 @@ export function createJevCapabilityProvider(client: JevClient): CapabilityProvid
       version: "1.0.0",
       title: "Ask Jev a structured question",
       description:
-        "Calls POST /v1/systemone with an arbitrary JSON state and one or more choice/score/noul questions; validates every answer before returning it.",
-      tags: ["jev", "typesafe", "ask", "classification"],
+        "Asks OpenAI (structured output) about an arbitrary JSON state and one or more choice/score/noul questions; validates every answer before returning it.",
+      tags: ["jev", "openai", "ask", "classification"],
       inputSchema: ASK_INPUT_SCHEMA,
       outputSchema: ASK_OUTPUT_SCHEMA,
       permissions: [
-        { permission: "jev.ask.invoke", risk: "medium", reason: "Sends the caller-supplied state to TypeSafe's Jev API and spends usage budget." },
+        { permission: "jev.ask.invoke", risk: "medium", reason: "Sends the caller-supplied state to OpenAI and spends usage budget." },
       ],
     },
   ];

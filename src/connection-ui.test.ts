@@ -98,13 +98,13 @@ describe("createJevConnectionUi", () => {
     expect(buttonIdsOf(document)).toEqual(["jev-test-button", "jev-disconnect-button"]);
   });
 
-  it("renders an env note (no key form, no disconnect) when the key comes from TYPESAFE_API_KEY", async () => {
+  it("renders an env note (no key form, no disconnect) when the key comes from OPENAI_API_KEY", async () => {
     const { context, shownDocuments } = fakeContext();
     const status: JevStatus = { state: "connected", model: "jev-latest", source: "env" };
     const { capabilityProvider } = createJevConnectionUi(context, fakeHandle(status));
     await capabilityProvider.invoke("jev.connect", {}, INVOCATION);
     const document = shownDocuments[0];
-    expect(textOf(document).join(" ")).toContain("TYPESAFE_API_KEY");
+    expect(textOf(document).join(" ")).toContain("OPENAI_API_KEY");
     expect(buttonIdsOf(document)).toEqual(["jev-test-button"]);
   });
 

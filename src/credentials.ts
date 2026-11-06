@@ -45,7 +45,7 @@ const DEFAULT_NAMESPACE = "@marshal/jev";
 /** Thrown by `setKey` when sealing is requested but unavailable — callers must not fall back to plaintext. */
 export class SecretsUnavailableError extends Error {
   constructor() {
-    super("Cannot save the TypeSafe API key: the host's secure secret storage is unavailable on this machine.");
+    super("Cannot save the OpenAI API key: the host's secure secret storage is unavailable on this machine.");
     this.name = "SecretsUnavailableError";
   }
 }
