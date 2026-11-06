@@ -7,9 +7,10 @@
  * for TYPES ONLY and resolve the live service instance by injection (Symbol
  * lookup), never by importing implementation code.
  *
- * Wire contract and validation logic follow TypeSafe's Jev "System One" API
- * (POST https://api.typesafe.ai/v1/systemone, GET /v1/models) as exercised by
- * Browser Use's jev-ultrafast reference client (MIT) — see README.md.
+ * The contract is the one TypeSafe's Jev "System One" API defined (validation
+ * follows Browser Use's jev-ultrafast reference client, MIT — see README.md);
+ * answers are now produced by OpenAI Chat Completions with Structured Outputs
+ * (POST /v1/chat/completions, GET /v1/models) using the user's OpenAI key.
  */
 
 // ---------------------------------------------------------------------------
@@ -25,8 +26,9 @@ export const JEV_CLIENT_SERVICE_VERSION = "1.0.0" as const;
  */
 export const JEV_CLIENT_SERVICE_TOKEN: symbol = Symbol.for(JEV_CLIENT_SERVICE_ID);
 
-export const DEFAULT_JEV_MODEL = "jev-latest" as const;
-export const DEFAULT_JEV_API_BASE_URL = "https://api.typesafe.ai" as const;
+/** OpenAI model used when a request omits `model` or names a legacy TypeSafe `jev-*` model. */
+export const DEFAULT_JEV_MODEL = "gpt-5-mini" as const;
+export const DEFAULT_JEV_API_BASE_URL = "https://api.openai.com" as const;
 
 // ---------------------------------------------------------------------------
 // Questions (request)

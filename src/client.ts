@@ -19,6 +19,7 @@ import {
   rateLimitedError,
   unavailableError,
 } from "./errors.js";
+import { buildChatRequest, defaultReasoningEffort, openAiErrorMessage, parseChatCompletion, toJevAnswers } from "./openai.js";
 import type { JevFetch } from "./transport.js";
 import { getJsonWithRetry, isAbortError, postJsonWithRetry } from "./transport.js";
 import { validateAnswer } from "./validation.js";
@@ -26,9 +27,11 @@ import { validateAnswer } from "./validation.js";
 export interface CreateJevClientOptions {
   readonly keyStore: KeyStore;
   readonly fetchImpl: JevFetch;
-  /** Injectable for tests; defaults to `process.env`. Only `TYPESAFE_API_KEY` is ever read. */
+  /** Injectable for tests; defaults to `process.env`. Only `OPENAI_API_KEY` is ever read. */
   readonly env?: Readonly<Record<string, string | undefined>>;
   readonly defaultModel?: string;
+  /** Overrides the per-model default (`minimal` for gpt-5 / gpt-5-mini / gpt-5-nano, otherwise unset). */
+  readonly reasoningEffort?: string;
   readonly apiBaseUrl?: string;
   readonly now?: () => Date;
 }
@@ -74,22 +77,20 @@ export function createJevClient(options: CreateJevClientOptions): JevClientHandl
   async function resolveKey(): Promise<ResolvedKey | undefined> {
     const stored = await keyStore.getKey();
     if (stored) return { key: stored, source: "stored" };
-    const envKey = env.TYPESAFE_API_KEY;
+    const envKey = env.OPENAI_API_KEY;
     if (envKey) return { key: envKey, source: "env" };
     return undefined;
   }
 
-  /** Maps a non-2xx TypeSafe HTTP status to a typed error, recording the connection-affecting ones for `status()`. */
+  /** Requests may still name TypeSafe's `jev-*` models (the automation extension sends `jev-latest`); those use the configured OpenAI model. */
+  function resolveModel(requested: string | undefined): string {
+    return !requested || /^jev(-|$)/i.test(requested) ? defaultModel : requested;
+  }
+
+  /** Maps a non-2xx OpenAI HTTP status to a typed error, recording the connection-affecting ones for `status()`. */
   function mapHttpError(status: number, body: unknown, recordState: boolean) {
-    const detail = isRecord(body) && isRecord(body.detail) ? body.detail : undefined;
-    const message =
-      isRecord(body) && typeof body.error === "string"
-        ? body.error
-        : detail && typeof detail.message === "string"
-          ? detail.message
-          : undefined;
-    // TypeSafe answers a bad key with 403 + detail.error_type "authentication_error".
-    if (status === 401 || (status === 403 && detail?.error_type === "authentication_error")) {
+    const message = openAiErrorMessage(body);
+    if (status === 401) {
       if (recordState) lastError = { state: "invalid-key", detail: message };
       return invalidKeyError(message);
     }
@@ -105,7 +106,7 @@ export function createJevClient(options: CreateJevClientOptions): JevClientHandl
       if (recordState) lastError = { state: "unavailable", detail: message };
       return unavailableError(status, message);
     }
-    return badRequestError(message ?? `TypeSafe rejected the request (HTTP ${status}).`, status);
+    return badRequestError(message ?? `OpenAI rejected the request (HTTP ${status}).`, status);
   }
 
   async function status(): Promise<JevStatus> {
@@ -131,39 +132,39 @@ export function createJevClient(options: CreateJevClientOptions): JevClientHandl
   async function ask(request: JevAskRequest, askOptions: JevAskOptions = {}): Promise<JevAskResult> {
     const resolved = await resolveKey();
     if (!resolved) throw notConnectedError();
-    const model = request.model ?? defaultModel;
+    const model = resolveModel(request.model);
     const startedAt = Date.now();
     let response: Awaited<ReturnType<typeof postJsonWithRetry>>;
     try {
       response = await postJsonWithRetry(
         fetchImpl,
-        `${apiBaseUrl}/v1/systemone`,
+        `${apiBaseUrl}/v1/chat/completions`,
         resolved.key,
-        { model, state: request.state, questions: request.questions },
+        buildChatRequest(model, request.state, request.questions, options.reasoningEffort ?? defaultReasoningEffort(model)),
         { signal: askOptions.signal, timeoutMs: askOptions.timeoutMs },
       );
     } catch (error) {
       if (isAbortError(error)) throw abortedError();
       lastError = { state: "unavailable", detail: error instanceof Error ? error.message : undefined };
-      throw unavailableError(undefined, "Could not reach TypeSafe's Jev API.");
+      throw unavailableError(undefined, "Could not reach the OpenAI API.");
     }
     if (response.status < 200 || response.status >= 300) {
       throw mapHttpError(response.status, response.body, true);
     }
-    if (!isRecord(response.body) || !isRecord(response.body.answers) || typeof response.body.model !== "string") {
-      throw invalidResponseError("Jev returned a malformed /v1/systemone response.");
-    }
-    const rawAnswers = response.body.answers;
+    const completion = parseChatCompletion(response.body);
+    if (!completion) throw invalidResponseError("OpenAI returned a malformed chat completion.");
+    if (completion.refusal) throw invalidResponseError(`OpenAI refused the request: ${completion.refusal}`);
+    const rawAnswers = toJevAnswers(request.questions, completion.output);
     const answers: Record<string, ReturnType<typeof validateAnswer>> = {};
     for (const [name, question] of Object.entries(request.questions)) {
       answers[name] = validateAnswer(name, question, rawAnswers[name]);
     }
-    const usage = isRecord(response.body.usage) ? response.body.usage : {};
+    const usage = completion.usage;
     lastError = undefined;
     lastVerifiedAt = now().toISOString();
     return {
       answers,
-      model: response.body.model,
+      model: completion.model ?? model,
       usage: {
         input_tokens: nonNegativeNumber(usage.input_tokens),
         output_tokens: nonNegativeNumber(usage.output_tokens),
@@ -180,26 +181,23 @@ export function createJevClient(options: CreateJevClientOptions): JevClientHandl
     } catch (error) {
       if (isAbortError(error)) throw abortedError();
       if (recordState) lastError = { state: "unavailable", detail: error instanceof Error ? error.message : undefined };
-      throw unavailableError(undefined, "Could not reach TypeSafe's Jev API.");
+      throw unavailableError(undefined, "Could not reach the OpenAI API.");
     }
     if (response.status < 200 || response.status >= 300) {
       throw mapHttpError(response.status, response.body, recordState);
     }
-    const list = Array.isArray(response.body)
-      ? response.body
-      : isRecord(response.body) && Array.isArray(response.body.models)
-        ? response.body.models
-        : isRecord(response.body) && Array.isArray(response.body.data)
-          ? response.body.data
-          : undefined;
-    if (!list) throw invalidResponseError("Jev returned a malformed /v1/models response.");
+    const list = isRecord(response.body) && Array.isArray(response.body.data) ? response.body.data : undefined;
+    if (!list) throw invalidResponseError("OpenAI returned a malformed /v1/models response.");
     const cards: JevModelCard[] = [];
     for (const entry of list) {
-      if (isRecord(entry) && typeof entry.name === "string") {
+      if (isRecord(entry) && typeof entry.id === "string") {
         cards.push({
-          name: entry.name,
-          description: typeof entry.description === "string" ? entry.description : "",
-          release_date: typeof entry.release_date === "string" ? entry.release_date : "",
+          name: entry.id,
+          description: typeof entry.owned_by === "string" ? `OpenAI model (${entry.owned_by})` : "OpenAI model",
+          release_date:
+            typeof entry.created === "number" && Number.isFinite(entry.created)
+              ? new Date(entry.created * 1000).toISOString().slice(0, 10)
+              : "",
         });
       }
     }
@@ -219,7 +217,7 @@ export function createJevClient(options: CreateJevClientOptions): JevClientHandl
   async function saveKey(key: string): Promise<JevStatus> {
     const trimmed = key.trim();
     if (!trimmed) throw badRequestError("The API key must not be empty.");
-    // Verify BEFORE persisting: never store a key that TypeSafe rejects.
+    // Verify BEFORE persisting: never store a key that OpenAI rejects.
     await fetchModels(trimmed, false);
     // `keyStore.setKey` throws `SecretsUnavailableError` (never falls back to
     // plaintext) when sealing isn't available — propagated as-is so the

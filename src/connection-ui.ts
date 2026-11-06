@@ -47,15 +47,15 @@ const STATUS_BADGES: Record<JevStatus["state"], string> = {
 function defaultMessageFor(status: JevStatus): string {
   switch (status.state) {
     case "not-connected":
-      return "Connect a TypeSafe API key to use Jev.";
+      return "Connect an OpenAI API key to use Jev.";
     case "connected":
-      return `Connected. Using model ${status.model}${status.source === "env" ? " (key from TYPESAFE_API_KEY)" : ""}.`;
+      return `Connected. Using model ${status.model}${status.source === "env" ? " (key from OPENAI_API_KEY)" : ""}.`;
     case "invalid-key":
       return status.detail ?? "The active API key was rejected. Paste a new one.";
     case "rate-limited":
-      return status.detail ?? "TypeSafe is rate-limiting this key right now. Try again shortly.";
+      return status.detail ?? "OpenAI is rate-limiting this key right now. Try again shortly.";
     case "unavailable":
-      return status.detail ?? "TypeSafe's Jev API is temporarily unavailable.";
+      return status.detail ?? "The OpenAI API is temporarily unavailable.";
   }
 }
 
@@ -85,14 +85,14 @@ function connectionDocument(status: JevStatus, message: string) {
   const showTest = status.source !== undefined;
   const showDisconnect = status.source === "stored";
   const children: unknown[] = [
-    { type: "heading", id: "jev-title", text: "Connect Jev (TypeSafe)", level: 3 },
+    { type: "heading", id: "jev-title", text: "Connect Jev (OpenAI)", level: 3 },
     { type: "badge", id: "jev-state", text: STATUS_BADGES[status.state], tone: toneFor(status.state) },
     { type: "text", id: "jev-message", text: message, tone: toneFor(status.state) === "danger" ? "danger" : "muted" },
     { type: "divider", id: "jev-divider" },
     {
       type: "text",
       id: "jev-scope",
-      text: "Sends the state/questions you (or an agent) provide to TypeSafe's hosted Jev model. The API key is stored only on this machine and is never shown in chat.",
+      text: "Sends the state/questions you (or an agent) provide to OpenAI. The API key is stored only on this machine and is never shown in chat.",
       tone: "muted",
     },
     ...(showKeyForm
@@ -100,21 +100,21 @@ function connectionDocument(status: JevStatus, message: string) {
           {
             type: "text",
             id: "jev-key-hint",
-            text: "Create a key in your TypeSafe dashboard (api.typesafe.ai), then paste it here. It is verified before it is saved.",
+            text: "Create a key at platform.openai.com/api-keys, then paste it here. It is verified before it is saved.",
             tone: "muted",
           },
-          { type: "input", id: "jev-key-input", name: "key", label: "TypeSafe API key", placeholder: "sk-..." },
+          { type: "input", id: "jev-key-input", name: "key", label: "OpenAI API key", placeholder: "sk-..." },
           { type: "button", id: "jev-save-button", label: "Save key", actionId: "save" },
         ]
       : status.source === "env"
-        ? [{ type: "text", id: "jev-env-note", text: "Key supplied by TYPESAFE_API_KEY; edit the environment variable to change it.", tone: "muted" }]
+        ? [{ type: "text", id: "jev-env-note", text: "Key supplied by OPENAI_API_KEY; edit the environment variable to change it.", tone: "muted" }]
         : []),
     ...(showTest ? [{ type: "button", id: "jev-test-button", label: "Test connection", actionId: "test" }] : []),
     ...(showDisconnect ? [{ type: "button", id: "jev-disconnect-button", label: "Disconnect", actionId: "disconnect", variant: "danger" }] : []),
   ];
   return {
     protocolVersion: PROTOCOL_VERSION,
-    title: "Connect Jev (TypeSafe)",
+    title: "Connect Jev (OpenAI)",
     // An untitled card node renders as a bordered, always-expanded container; a titled one collapses.
     root: { type: "card", id: "jev-connect-card", children: [{ type: "stack", id: "jev-connect-body", gap: "small", children }] },
     actions: [
@@ -143,13 +143,13 @@ export function createJevConnectionUi(
             : "Disconnect Jev",
     description:
       name === "jev.connect"
-        ? "Shows the Jev connection card in chat. Use when the user asks to connect Jev/TypeSafe, or when jev.status reports anything other than connected."
+        ? "Shows the Jev connection card in chat. Use when the user asks to connect Jev or its OpenAI key, or when jev.status reports anything other than connected."
         : name === "jev.connection.save_key"
           ? "Card-only action: verifies a pasted API key against GET /v1/models BEFORE storing it. The key never appears in chat output."
           : name === "jev.connection.test"
             ? "Card-only action: re-verifies the active key and refreshes the card."
             : "Card-only action: deletes the stored API key (an env-supplied key is unaffected).",
-    tags: ["jev", "typesafe", "connect"],
+    tags: ["jev", "openai", "connect"],
     inputSchema: name === "jev.connection.save_key" ? SAVE_KEY_INPUT_SCHEMA : EMPTY_INPUT_SCHEMA,
     outputSchema: STATUS_MESSAGE_OUTPUT_SCHEMA,
     permissions: [
@@ -162,7 +162,7 @@ export function createJevConnectionUi(
             : name === "jev.connection.save_key"
               ? "Writes a user-pasted API key to the local sealed credential store."
               : name === "jev.connection.test"
-                ? "Re-verifies the active key against TypeSafe."
+                ? "Re-verifies the active key against OpenAI."
                 : "Deletes the stored API key.",
       },
     ],
@@ -240,8 +240,8 @@ export function createJevConnectionUi(
   const uiApplications: readonly RuntimeExtensionUiApplication[] = [
     {
       id: APPLICATION_ID,
-      title: "Connect Jev (TypeSafe)",
-      description: "Sign in to TypeSafe's Jev API and return to this chat.",
+      title: "Connect Jev (OpenAI)",
+      description: "Connect an OpenAI API key for Jev and return to this chat.",
       renderId: "jev.connections.v1",
       resource: { uri: "jev-runtime://connections/jev", mimeType: "text/plain", text: "" },
       application: {
@@ -279,7 +279,7 @@ export function createJevConnectionUi(
             })),
           ),
       },
-      tags: ["jev", "typesafe", "connect"],
+      tags: ["jev", "openai", "connect"],
       // Phone-friendly declarative card (~390px width). Per
       // docs/architecture/MOBILE-RUNTIME-UI.md / common/runtime-ui-viewports.ts
       // an undeclared surface is desktop-only — this MUST be explicit.
